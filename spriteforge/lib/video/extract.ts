@@ -248,7 +248,6 @@ export async function extractFrames(opts: ExtractOptions): Promise<Frame[]> {
         },
         {
           id,
-          index: i,
           width: encoded.width,
           height: encoded.height,
           originalBlob: encoded.originalBlob,

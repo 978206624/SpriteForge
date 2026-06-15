@@ -5,12 +5,12 @@ import { Stepper } from "@/components/stepper";
 import { BottomNav } from "@/components/bottom-nav";
 import { ImportStep } from "@/components/step-import/import-step";
 import { ExtractStep } from "@/components/step-extract/extract-step";
+import { PreviewStep } from "@/components/step-preview/preview-step";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 import { STEPS, type StepKey } from "@/types";
 
-// Placeholder bodies for steps not yet built (Phases 5-7).
+// Placeholder bodies for steps not yet built (Phases 6-7).
 const PLACEHOLDER: Partial<Record<StepKey, { title: string; hint: string }>> = {
-  preview: { title: "第三步 · 预览与帧管理", hint: "Phase 5：动画预览、删帧、查重、循环" },
   export: { title: "第四步 · 导出", hint: "Phase 6-7：Sprite Sheet / ZIP、登录导出" },
 };
 
@@ -36,6 +36,8 @@ export default function Home() {
           <ImportStep />
         ) : currentStep === "extract" ? (
           <ExtractStep />
+        ) : currentStep === "preview" ? (
+          <PreviewStep />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-6">
             <h1 className="text-2xl font-bold text-fg">{placeholder?.title}</h1>

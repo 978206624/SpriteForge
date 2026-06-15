@@ -6,9 +6,11 @@ import {
   type ExportFps,
   type Frame,
   type FrameId,
+  type LoopRange,
   type StepKey,
   type VideoMeta,
 } from "@/types";
+import { clampLoopRange } from "@/lib/frames/loop";
 
 const ORDER: StepKey[] = STEPS.map((s) => s.key);
 
@@ -76,6 +78,29 @@ interface WorkflowState {
   setChromaError: (error: string | null) => void;
   /** patch one frame's metadata in place (processed result / override / rev) */
   updateFrameMeta: (id: FrameId, patch: Partial<Frame>) => void;
+
+  // ---- Step 3: preview & frame management ----
+  isPlaying: boolean;
+  /** animation preview frame rate */
+  playbackFps: number;
+  /** loop the preview (vs play once) */
+  looping: boolean;
+  /** marked loop sub-segment (positions), null = whole sequence */
+  loopRange: LoopRange | null;
+  /** current playhead position (frame-array index) */
+  previewIndex: number;
+  /** frames selected in the strip for deletion */
+  selection: FrameId[];
+  setPlaying: (playing: boolean) => void;
+  setPlaybackFps: (fps: number) => void;
+  setLooping: (looping: boolean) => void;
+  setLoopRange: (range: LoopRange | null) => void;
+  setPreviewIndex: (index: number) => void;
+  toggleFrameSelection: (id: FrameId) => void;
+  clearSelection: () => void;
+  /** replace frames after a deletion, clamping loop/playhead and clearing
+   *  selection (DB deletion is performed by the caller first) */
+  applyDeletion: (frames: Frame[]) => void;
 }
 
 const INITIAL_FRAME_STATE = {
@@ -88,6 +113,12 @@ const INITIAL_FRAME_STATE = {
   chromaStatus: "idle" as ChromaStatus,
   chromaProgress: { done: 0, total: 0 } as ExtractProgress,
   chromaError: null as string | null,
+  isPlaying: false,
+  playbackFps: 12,
+  looping: true,
+  loopRange: null as LoopRange | null,
+  previewIndex: 0,
+  selection: [] as FrameId[],
 };
 
 /** Reset extracted frames when the range/fps changes after extraction, so a
@@ -223,5 +254,36 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   updateFrameMeta: (id, patch) =>
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    })),
+
+  // ---- Step 3: preview & frame management ----
+  setPlaying: (isPlaying) => set({ isPlaying }),
+  setPlaybackFps: (playbackFps) =>
+    set({ playbackFps: Math.max(1, Math.min(60, Math.round(playbackFps))) }),
+  setLooping: (looping) => set({ looping }),
+  setLoopRange: (loopRange) =>
+    set((s) => ({ loopRange: clampLoopRange(loopRange, s.frames.length) })),
+  setPreviewIndex: (index) =>
+    set((s) => ({
+      previewIndex: Math.max(0, Math.min(index, s.frames.length - 1)),
+    })),
+  toggleFrameSelection: (id) =>
+    set((s) => ({
+      selection: s.selection.includes(id)
+        ? s.selection.filter((x) => x !== id)
+        : [...s.selection, id],
+    })),
+  clearSelection: () => set({ selection: [] }),
+  applyDeletion: (frames) =>
+    set((s) => ({
+      frames,
+      selection: [],
+      // drop the edit-modal target if that frame was just deleted
+      selectedFrameId:
+        s.selectedFrameId && frames.some((f) => f.id === s.selectedFrameId)
+          ? s.selectedFrameId
+          : null,
+      loopRange: clampLoopRange(s.loopRange, frames.length),
+      previewIndex: Math.max(0, Math.min(s.previewIndex, frames.length - 1)),
     })),
 }));

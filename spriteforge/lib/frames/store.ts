@@ -89,6 +89,51 @@ export async function getPixels(id: FrameId): Promise<FramePixels | undefined> {
   return db.get(PIXEL_STORE, id);
 }
 
+/** Best displayable blob for a frame: the chroma-keyed result if present,
+ *  else the original. Used by the animation preview and export. */
+export async function getDisplayBlob(id: FrameId): Promise<Blob | undefined> {
+  const pixels = await getPixels(id);
+  return pixels?.processedBlob ?? pixels?.originalBlob;
+}
+
+/**
+ * Delete frames and re-index the survivors contiguously (so `index` always
+ * equals array position), updating the manifest's `total` so the cache stays
+ * restorable. Returns the fresh, re-indexed frame metadata.
+ */
+export async function deleteFrames(ids: FrameId[]): Promise<Frame[]> {
+  const db = await getDB();
+  const idSet = new Set(ids);
+  const tx = db.transaction([THUMB_STORE, PIXEL_STORE, META_STORE], "readwrite");
+  const thumbStore = tx.objectStore(THUMB_STORE);
+  const pixelStore = tx.objectStore(PIXEL_STORE);
+
+  for (const id of ids) {
+    thumbStore.delete(id);
+    pixelStore.delete(id);
+  }
+
+  // survivors in index order; re-number any whose position shifted
+  const remaining = (await thumbStore.index("by-index").getAll()).filter(
+    (t) => !idSet.has(t.id),
+  );
+  remaining.forEach((t, i) => {
+    if (t.index !== i) {
+      t.index = i;
+      thumbStore.put(t);
+    }
+  });
+
+  const manifest = await tx.objectStore(META_STORE).get(MANIFEST_KEY);
+  if (manifest) {
+    manifest.total = remaining.length;
+    tx.objectStore(META_STORE).put(manifest, MANIFEST_KEY);
+  }
+
+  await tx.done;
+  return remaining.map(toFrameMeta);
+}
+
 /** Number of frames currently persisted. */
 export async function countFrames(): Promise<number> {
   const db = await getDB();

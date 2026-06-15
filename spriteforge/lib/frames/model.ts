@@ -27,10 +27,14 @@ export interface FrameThumb {
   rev: number;
 }
 
-/** Heavy per-frame record: full-resolution pixels, read on demand. */
+/**
+ * Heavy per-frame record: full-resolution pixels, read on demand by id only.
+ * Deliberately carries NO `index` — ordering lives solely on {@link FrameThumb}
+ * (the `by-index` store), so deletions re-index only the light records and
+ * never have to load these megabyte blobs just to renumber.
+ */
 export interface FramePixels {
   id: FrameId;
-  index: number;
   width: number;
   height: number;
   /** full-resolution lossless source frame (PNG), input for chroma keying */
