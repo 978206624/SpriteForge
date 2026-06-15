@@ -2,11 +2,20 @@ import { create } from "zustand";
 import {
   STEPS,
   type ExportFps,
+  type Frame,
+  type FrameId,
   type StepKey,
   type VideoMeta,
 } from "@/types";
 
 const ORDER: StepKey[] = STEPS.map((s) => s.key);
+
+export type ExtractStatus = "idle" | "extracting" | "done";
+
+export interface ExtractProgress {
+  done: number;
+  total: number;
+}
 
 interface WorkflowState {
   // ---- Step navigation ----
@@ -34,6 +43,39 @@ interface WorkflowState {
   setInTime: (t: number) => void;
   setOutTime: (t: number) => void;
   setFps: (fps: ExportFps) => void;
+
+  // ---- Step 2A: frame extraction ----
+  /** lightweight per-frame metadata; bitmap blobs live in IndexedDB */
+  frames: Frame[];
+  extractStatus: ExtractStatus;
+  extractProgress: ExtractProgress;
+  extractError: string | null;
+  /** currently selected frame in the grid */
+  selectedFrameId: FrameId | null;
+  setFrames: (frames: Frame[]) => void;
+  appendFrame: (frame: Frame) => void;
+  setExtractStatus: (status: ExtractStatus) => void;
+  setExtractProgress: (progress: ExtractProgress) => void;
+  setExtractError: (error: string | null) => void;
+  selectFrame: (id: FrameId | null) => void;
+  /** clear in-memory frame state (does not touch IndexedDB) */
+  resetFrames: () => void;
+}
+
+const INITIAL_FRAME_STATE = {
+  frames: [] as Frame[],
+  extractStatus: "idle" as ExtractStatus,
+  extractProgress: { done: 0, total: 0 } as ExtractProgress,
+  extractError: null as string | null,
+  selectedFrameId: null as FrameId | null,
+};
+
+/** Reset extracted frames when the range/fps changes after extraction, so a
+ *  stale frame set can't carry into later steps. No-op when none exist yet, so
+ *  ordinary slider dragging before extraction stays cheap. The IndexedDB
+ *  manifest (which records the params) is reconciled separately on next visit. */
+function invalidateFrames(get: () => WorkflowState): Partial<WorkflowState> {
+  return get().frames.length > 0 ? { ...INITIAL_FRAME_STATE } : {};
 }
 
 function indexOf(step: StepKey): number {
@@ -84,6 +126,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       inTime: 0,
       outTime: 0,
       fps: "original",
+      ...INITIAL_FRAME_STATE,
     });
   },
 
@@ -105,6 +148,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       inTime: 0,
       outTime: meta.duration,
       fps: "original",
+      // a new source invalidates any previously extracted frames
+      ...INITIAL_FRAME_STATE,
     });
   },
 
@@ -118,19 +163,35 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       inTime: 0,
       outTime: 0,
       fps: "original",
+      ...INITIAL_FRAME_STATE,
     });
   },
 
   setInTime: (t) => {
     const { outTime } = get();
-    set({ inTime: Math.max(0, Math.min(t, outTime)) });
+    set({ inTime: Math.max(0, Math.min(t, outTime)), ...invalidateFrames(get) });
   },
 
   setOutTime: (t) => {
     const { inTime, videoMeta } = get();
     const max = videoMeta?.duration ?? t;
-    set({ outTime: Math.min(max, Math.max(t, inTime)) });
+    set({
+      outTime: Math.min(max, Math.max(t, inTime)),
+      ...invalidateFrames(get),
+    });
   },
 
-  setFps: (fps) => set({ fps }),
+  setFps: (fps) => set({ fps, ...invalidateFrames(get) }),
+
+  // ---- Step 2A: frame extraction ----
+  ...INITIAL_FRAME_STATE,
+
+  setFrames: (frames) => set({ frames }),
+  appendFrame: (frame) =>
+    set((s) => ({ frames: [...s.frames, frame] })),
+  setExtractStatus: (extractStatus) => set({ extractStatus }),
+  setExtractProgress: (extractProgress) => set({ extractProgress }),
+  setExtractError: (extractError) => set({ extractError }),
+  selectFrame: (selectedFrameId) => set({ selectedFrameId }),
+  resetFrames: () => set({ ...INITIAL_FRAME_STATE }),
 }));
