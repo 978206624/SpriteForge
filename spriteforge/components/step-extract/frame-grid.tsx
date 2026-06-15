@@ -6,75 +6,82 @@ import { useWorkflowStore } from "@/lib/store/workflow-store";
 import type { FrameId } from "@/types";
 import { FrameGridItem } from "./frame-grid-item";
 
+interface ThumbKey {
+  id: FrameId;
+  /** bumps when the processed thumbnail changes; forces a reload */
+  rev: number;
+}
+
+interface CachedUrl {
+  url: string;
+  rev: number;
+}
+
 /**
- * Lazily resolve a `blob:` URL per frame thumbnail. Each frame is read from
- * IndexedDB only once; URLs are revoked when a frame disappears from the list
- * (re-extract / video swap) and all are revoked on unmount.
+ * Lazily resolve a `blob:` URL per frame thumbnail. A frame is (re)loaded the
+ * first time it appears and whenever its `rev` bumps (e.g. after chroma keying
+ * replaces the thumbnail). URLs are revoked when their frame disappears, when a
+ * newer rev supersedes them, and all on unmount.
  */
-function useThumbnailUrls(frameIds: FrameId[]): Map<FrameId, string> {
+function useThumbnailUrls(keys: ThumbKey[]): Map<FrameId, string> {
   const [urls, setUrls] = useState<Map<FrameId, string>>(() => new Map());
 
-  // mirror the latest map into a ref (in an effect, never during render) so the
-  // unmount cleanup can revoke whatever URLs are live at teardown
-  const latestRef = useRef(urls);
-  useEffect(() => {
-    latestRef.current = urls;
-  }, [urls]);
+  // mirror the latest revs + urls into refs (in effects, never during render)
+  const urlMetaRef = useRef<Map<FrameId, CachedUrl>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
-    const wanted = new Set(frameIds);
+    const wanted = new Map(keys.map((k) => [k.id, k.rev]));
+    const cache = urlMetaRef.current;
 
-    // All state updates happen after an await (never synchronously in the
-    // effect body), so a single pass both revokes gone URLs and adds new ones.
+    const stale = keys.filter((k) => {
+      const c = cache.get(k.id);
+      return !c || c.rev !== k.rev;
+    });
+    const gone = [...cache.keys()].some((id) => !wanted.has(id));
+    if (stale.length === 0 && !gone) return;
+
     void (async () => {
-      const have = latestRef.current;
-      const missing = frameIds.filter((id) => !have.has(id));
-      const gone = [...have.keys()].some((id) => !wanted.has(id));
-      // nothing to add or remove — skip the state update entirely (no re-render)
-      if (missing.length === 0 && !gone) return;
-
       const loaded = await Promise.all(
-        missing.map(async (id) => {
-          const blob = await getThumb(id);
-          return blob ? ([id, URL.createObjectURL(blob)] as const) : null;
+        stale.map(async (k) => {
+          const blob = await getThumb(k.id);
+          return blob
+            ? ({ id: k.id, rev: k.rev, url: URL.createObjectURL(blob) } as const)
+            : null;
         }),
       );
       if (cancelled) {
-        for (const e of loaded) if (e) URL.revokeObjectURL(e[1]);
+        for (const e of loaded) if (e) URL.revokeObjectURL(e.url);
         return;
       }
-      setUrls((prev) => {
-        const next = new Map(prev);
-        let changed = false;
-        for (const [id, url] of prev) {
-          if (!wanted.has(id)) {
-            URL.revokeObjectURL(url);
-            next.delete(id);
-            changed = true;
-          }
+      // revoke superseded urls for the freshly-loaded frames
+      for (const e of loaded) {
+        if (!e) continue;
+        const prev = cache.get(e.id);
+        if (prev && prev.rev !== e.rev) URL.revokeObjectURL(prev.url);
+        cache.set(e.id, { url: e.url, rev: e.rev });
+      }
+      // revoke + drop urls whose frame is gone
+      for (const id of [...cache.keys()]) {
+        if (!wanted.has(id)) {
+          URL.revokeObjectURL(cache.get(id)!.url);
+          cache.delete(id);
         }
-        for (const e of loaded) {
-          if (!e) continue;
-          if (next.has(e[0])) URL.revokeObjectURL(e[1]); // raced; keep existing
-          else {
-            next.set(e[0], e[1]);
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
+      }
+      setUrls(new Map([...cache].map(([id, c]) => [id, c.url])));
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [frameIds]);
+  }, [keys]);
 
   // revoke everything on final unmount
   useEffect(() => {
+    const cache = urlMetaRef.current;
     return () => {
-      for (const url of latestRef.current.values()) URL.revokeObjectURL(url);
+      for (const c of cache.values()) URL.revokeObjectURL(c.url);
+      cache.clear();
     };
   }, []);
 
@@ -86,10 +93,13 @@ export function FrameGrid() {
   const selectedFrameId = useWorkflowStore((s) => s.selectedFrameId);
   const selectFrame = useWorkflowStore((s) => s.selectFrame);
 
-  // stabilize the id list so the thumbnail effect only re-runs when the set of
-  // frames actually changes (not on unrelated re-renders like theme toggles)
-  const frameIds = useMemo(() => frames.map((f) => f.id), [frames]);
-  const urls = useThumbnailUrls(frameIds);
+  // stable id+rev list so the thumbnail effect only re-runs when frames or
+  // their processed revisions actually change
+  const keys = useMemo(
+    () => frames.map((f) => ({ id: f.id, rev: f.rev })),
+    [frames],
+  );
+  const urls = useThumbnailUrls(keys);
 
   if (frames.length === 0) return null;
 
@@ -100,10 +110,11 @@ export function FrameGrid() {
           key={frame.id}
           index={frame.index}
           url={urls.get(frame.id) ?? null}
+          processed={frame.processed}
+          needsAttention={frame.needsAttention}
+          hasOverride={frame.overrideParams !== null}
           selected={frame.id === selectedFrameId}
-          onSelect={() =>
-            selectFrame(frame.id === selectedFrameId ? null : frame.id)
-          }
+          onSelect={() => selectFrame(frame.id)}
         />
       ))}
     </div>

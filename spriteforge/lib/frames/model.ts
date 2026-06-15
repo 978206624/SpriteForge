@@ -19,6 +19,12 @@ export interface FrameThumb {
   overrideParams: ChromaParams | null;
   /** small grid thumbnail (JPEG for opaque originals, PNG once processed) */
   thumbBlob: Blob;
+  /** true once a chroma-keyed result has been produced */
+  processed: boolean;
+  /** heuristic: residual background remains (not cleanly keyed) */
+  needsAttention: boolean;
+  /** bumps when the processed result / thumbnail changes (cache busting) */
+  rev: number;
 }
 
 /** Heavy per-frame record: full-resolution pixels, read on demand. */
@@ -39,6 +45,9 @@ export function toFrameMeta(thumb: FrameThumb): Frame {
     id: thumb.id,
     index: thumb.index,
     overrideParams: thumb.overrideParams,
+    processed: thumb.processed,
+    needsAttention: thumb.needsAttention,
+    rev: thumb.rev,
   };
 }
 
@@ -69,6 +78,9 @@ export interface FrameManifest {
   /** expected frame count when extraction completes */
   total: number;
   status: "extracting" | "done";
+  /** global chroma params at last "apply to all"; restored so frames without
+   *  a per-frame override resolve to the right effective params after refresh */
+  globalChromaParams?: ChromaParams;
 }
 
 /** True when a persisted manifest is a complete cache matching the given

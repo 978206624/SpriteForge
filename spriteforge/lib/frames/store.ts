@@ -95,40 +95,77 @@ export async function countFrames(): Promise<number> {
   return db.count(THUMB_STORE);
 }
 
-/** Update a frame's per-frame override params in place (Phase 4). */
-export async function updateFrameOverride(
-  id: FrameId,
-  overrideParams: ChromaParams | null,
-): Promise<void> {
-  const db = await getDB();
-  const thumb = await db.get(THUMB_STORE, id);
-  if (!thumb) return;
-  thumb.overrideParams = overrideParams;
-  await db.put(THUMB_STORE, thumb);
+export interface ProcessedFrameUpdate {
+  /** per-frame chroma override (null = follows global params) */
+  overrideParams: ChromaParams | null;
+  /** chroma-keyed full-resolution result (PNG with alpha) */
+  processedBlob: Blob;
+  /** transparent grid thumbnail (PNG) */
+  thumbBlob: Blob;
+  /** residual-background heuristic flag */
+  needsAttention: boolean;
 }
 
-/** Replace a frame's processed (chroma-keyed) result + thumbnail (Phase 4). */
-export async function updateFrameProcessed(
+/**
+ * Commit a frame's chroma-keyed result: writes the processed pixels, the
+ * transparent thumbnail, the override params, the attention flag, and bumps
+ * `rev` so thumbnail URL caches reload. Returns the new `rev`, or null if the
+ * frame no longer exists.
+ */
+export async function saveProcessedFrame(
   id: FrameId,
-  processedBlob: Blob | null,
-  thumbBlob?: Blob,
-): Promise<void> {
+  update: ProcessedFrameUpdate,
+  signal?: AbortSignal,
+): Promise<number | null> {
   const db = await getDB();
   const tx = db.transaction([THUMB_STORE, PIXEL_STORE], "readwrite");
-  const [thumb, pixels] = await Promise.all([
-    tx.objectStore(THUMB_STORE).get(id),
-    tx.objectStore(PIXEL_STORE).get(id),
-  ]);
-  const ops: Promise<unknown>[] = [tx.done];
-  if (pixels) {
-    pixels.processedBlob = processedBlob;
-    ops.push(tx.objectStore(PIXEL_STORE).put(pixels));
+  const done = tx.done;
+  // keep a no-op handler so an aborted/early-returned transaction's rejected
+  // `done` never surfaces as an unhandled promise rejection
+  void done.catch(() => {});
+
+  let abortedBySignal = false;
+  const onAbort = () => {
+    abortedBySignal = true;
+    try {
+      tx.abort();
+    } catch {
+      /* already settled */
+    }
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    const [thumb, pixels] = await Promise.all([
+      tx.objectStore(THUMB_STORE).get(id),
+      tx.objectStore(PIXEL_STORE).get(id),
+    ]);
+    // superseded by a newer run — roll back without writing
+    if (signal?.aborted) {
+      onAbort();
+      return null;
+    }
+    // frame no longer exists (e.g. deleted) — not an error
+    if (!thumb || !pixels) return null;
+
+    const rev = thumb.rev + 1;
+    thumb.overrideParams = update.overrideParams;
+    thumb.thumbBlob = update.thumbBlob;
+    thumb.processed = true;
+    thumb.needsAttention = update.needsAttention;
+    thumb.rev = rev;
+    pixels.processedBlob = update.processedBlob;
+    tx.objectStore(THUMB_STORE).put(thumb);
+    tx.objectStore(PIXEL_STORE).put(pixels);
+    await done; // commit — throws on a real IndexedDB/quota failure
+    return rev;
+  } catch (err) {
+    // an intentional abort is not an error; a real DB/quota failure must surface
+    if (abortedBySignal || signal?.aborted) return null;
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
   }
-  if (thumb && thumbBlob) {
-    thumb.thumbBlob = thumbBlob;
-    ops.push(tx.objectStore(THUMB_STORE).put(thumb));
-  }
-  await Promise.all(ops);
 }
 
 /** Wipe all frames and the extraction manifest. */
@@ -150,6 +187,21 @@ export async function clearFrames(): Promise<void> {
 export async function setManifest(manifest: FrameManifest): Promise<void> {
   const db = await getDB();
   await db.put(META_STORE, manifest, MANIFEST_KEY);
+}
+
+/** Patch the stored manifest's global chroma params (after "apply to all"),
+ *  leaving the rest intact. No-op if no manifest exists yet. */
+export async function updateManifestGlobalParams(
+  globalChromaParams: ChromaParams,
+): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(META_STORE, "readwrite");
+  const manifest = await tx.store.get(MANIFEST_KEY);
+  if (manifest) {
+    manifest.globalChromaParams = globalChromaParams;
+    await tx.store.put(manifest, MANIFEST_KEY);
+  }
+  await tx.done;
 }
 
 /** Read the extraction manifest, or null when none is stored. */

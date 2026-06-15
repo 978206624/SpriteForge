@@ -65,6 +65,13 @@ export interface Frame {
   index: number;
   /** per-frame chroma override; falls back to the global params when null */
   overrideParams: ChromaParams | null;
+  /** true once a chroma-keyed result has been produced for this frame */
+  processed: boolean;
+  /** heuristic flag: residual background remains (not cleanly keyed) */
+  needsAttention: boolean;
+  /** bumps whenever the processed result / thumbnail changes, so thumbnail
+   *  URL caches keyed by frame id know to reload */
+  rev: number;
 }
 
 /** Inclusive loop range over frame indices, or null when unset. */

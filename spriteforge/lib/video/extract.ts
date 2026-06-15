@@ -237,7 +237,15 @@ export async function extractFrames(opts: ExtractOptions): Promise<Frame[]> {
       if (signal?.aborted) throw new AbortError();
 
       await putFrame(
-        { id, index: i, overrideParams: null, thumbBlob: encoded.thumbBlob },
+        {
+          id,
+          index: i,
+          overrideParams: null,
+          thumbBlob: encoded.thumbBlob,
+          processed: false,
+          needsAttention: false,
+          rev: 0,
+        },
         {
           id,
           index: i,
@@ -251,7 +259,14 @@ export async function extractFrames(opts: ExtractOptions): Promise<Frame[]> {
       // abort during the IndexedDB write must not surface as progress/done
       if (signal?.aborted) throw new AbortError();
 
-      const frame: Frame = { id, index: i, overrideParams: null };
+      const frame: Frame = {
+        id,
+        index: i,
+        overrideParams: null,
+        processed: false,
+        needsAttention: false,
+        rev: 0,
+      };
       frames.push(frame);
       onFrame?.(frame);
       onProgress?.(i + 1, total);

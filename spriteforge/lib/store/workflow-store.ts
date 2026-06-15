@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import {
+  DEFAULT_CHROMA_PARAMS,
   STEPS,
+  type ChromaParams,
   type ExportFps,
   type Frame,
   type FrameId,
@@ -11,6 +13,7 @@ import {
 const ORDER: StepKey[] = STEPS.map((s) => s.key);
 
 export type ExtractStatus = "idle" | "extracting" | "done";
+export type ChromaStatus = "idle" | "processing";
 
 export interface ExtractProgress {
   done: number;
@@ -60,6 +63,19 @@ interface WorkflowState {
   selectFrame: (id: FrameId | null) => void;
   /** clear in-memory frame state (does not touch IndexedDB) */
   resetFrames: () => void;
+
+  // ---- Step 2B: chroma key ----
+  /** params applied to frames without a per-frame override */
+  globalChromaParams: ChromaParams;
+  chromaStatus: ChromaStatus;
+  chromaProgress: ExtractProgress;
+  chromaError: string | null;
+  setGlobalChromaParams: (params: ChromaParams) => void;
+  setChromaStatus: (status: ChromaStatus) => void;
+  setChromaProgress: (progress: ExtractProgress) => void;
+  setChromaError: (error: string | null) => void;
+  /** patch one frame's metadata in place (processed result / override / rev) */
+  updateFrameMeta: (id: FrameId, patch: Partial<Frame>) => void;
 }
 
 const INITIAL_FRAME_STATE = {
@@ -68,6 +84,10 @@ const INITIAL_FRAME_STATE = {
   extractProgress: { done: 0, total: 0 } as ExtractProgress,
   extractError: null as string | null,
   selectedFrameId: null as FrameId | null,
+  globalChromaParams: DEFAULT_CHROMA_PARAMS as ChromaParams,
+  chromaStatus: "idle" as ChromaStatus,
+  chromaProgress: { done: 0, total: 0 } as ExtractProgress,
+  chromaError: null as string | null,
 };
 
 /** Reset extracted frames when the range/fps changes after extraction, so a
@@ -194,4 +214,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setExtractError: (extractError) => set({ extractError }),
   selectFrame: (selectedFrameId) => set({ selectedFrameId }),
   resetFrames: () => set({ ...INITIAL_FRAME_STATE }),
+
+  // ---- Step 2B: chroma key ----
+  setGlobalChromaParams: (globalChromaParams) => set({ globalChromaParams }),
+  setChromaStatus: (chromaStatus) => set({ chromaStatus }),
+  setChromaProgress: (chromaProgress) => set({ chromaProgress }),
+  setChromaError: (chromaError) => set({ chromaError }),
+  updateFrameMeta: (id, patch) =>
+    set((s) => ({
+      frames: s.frames.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    })),
 }));
