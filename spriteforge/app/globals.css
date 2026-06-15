@@ -16,6 +16,8 @@
   --fg-subtle: #9099a6;
   --brand: #ff6a2b;
   --brand-hover: #e85618;
+  --brand-strong: #c2410c;
+  --brand-strong-hover: #a8350a;
   --brand-soft: #ff6a2b1f;
   --on-brand: #ffffff;
   --success: #3dd68c;
@@ -38,6 +40,8 @@
   --fg-subtle: #6b7280;
   --brand: #ff6a2b;
   --brand-hover: #e85618;
+  --brand-strong: #c2410c;
+  --brand-strong-hover: #a8350a;
   --brand-soft: #ff6a2b26;
   --on-brand: #ffffff;
   --success: #3dd68c;
@@ -59,6 +63,8 @@
   --color-fg-subtle: var(--fg-subtle);
   --color-brand: var(--brand);
   --color-brand-hover: var(--brand-hover);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-strong-hover: var(--brand-strong-hover);
   --color-brand-soft: var(--brand-soft);
   --color-on-brand: var(--on-brand);
   --color-success: var(--success);

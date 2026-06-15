@@ -38,9 +38,9 @@ export function Stepper() {
               <span
                 className={cn(
                   "grid size-[26px] place-items-center rounded-full text-[13px] font-bold transition-colors",
-                  state === "current" && "bg-brand text-on-brand",
+                  state === "current" && "bg-brand-strong text-on-brand",
                   state === "done" &&
-                    "bg-brand-soft text-brand ring-1 ring-brand",
+                    "bg-brand-soft text-brand-strong ring-1 ring-brand-strong",
                   state === "todo" &&
                     "bg-elevated text-fg-subtle ring-1 ring-line",
                 )}
@@ -63,7 +63,7 @@ export function Stepper() {
               </span>
             </button>
             {i < STEPS.length - 1 && (
-              <span className="h-0.5 w-11 rounded-full bg-line" />
+              <span aria-hidden className="h-0.5 w-11 rounded-full bg-line" />
             )}
           </Fragment>
         );

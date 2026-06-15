@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Flame, Moon, Sun } from "lucide-react";
 
@@ -14,12 +13,6 @@ function GithubMark({ className }: { className?: string }) {
 
 export function TopBar() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // avoid hydration mismatch: theme is only known on the client
-  useEffect(() => setMounted(true), []);
-
-  const isDark = resolvedTheme === "dark";
 
   return (
     <header className="flex h-13 shrink-0 items-center justify-between border-b border-line bg-panel px-5">
@@ -48,19 +41,17 @@ export function TopBar() {
         <button
           type="button"
           aria-label="切换主题"
-          onClick={() => setTheme(isDark ? "light" : "dark")}
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           className="grid size-8 place-items-center rounded-md text-fg-muted transition-colors hover:bg-hover hover:text-fg"
         >
-          {mounted && isDark ? (
-            <Moon className="size-[18px]" />
-          ) : (
-            <Sun className="size-[18px]" />
-          )}
+          {/* icon follows the .dark class on <html> — no JS theme read, no hydration flash */}
+          <Sun className="size-[18px] dark:hidden" />
+          <Moon className="hidden size-[18px] dark:block" />
         </button>
         {/* Login / avatar slot — wired to Clerk in Phase 7 */}
         <button
           type="button"
-          className="rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+          className="rounded-md bg-brand-strong px-3 py-1.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover"
         >
           登录
         </button>

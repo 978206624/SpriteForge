@@ -30,7 +30,10 @@ export interface VideoMeta {
   size: number;
 }
 
-export type ExportFps = "original" | 24 | 12 | 8 | number;
+export type ExportFpsPreset = "original" | 24 | 12 | 8;
+/** `number & {}` keeps the preset literals from being widened away by `number`,
+ *  so editor autocomplete still suggests the presets while allowing custom fps. */
+export type ExportFps = ExportFpsPreset | (number & {});
 
 // ---- Chroma key ----
 

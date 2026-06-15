@@ -22,14 +22,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   completedSteps: [],
 
   goToStep: (step) => {
-    const { currentStep, completedSteps } = get();
-    // allow navigating to the current step, any completed step,
-    // or the immediate next step
-    const canGo =
-      step === currentStep ||
-      completedSteps.includes(step) ||
-      indexOf(step) <= indexOf(currentStep);
-    if (canGo) set({ currentStep: step });
+    const { currentStep } = get();
+    // allow jumping back to the current step or any earlier (already-visited) step;
+    // forward movement only happens via next() so steps get marked completed in order
+    if (indexOf(step) <= indexOf(currentStep)) set({ currentStep: step });
   },
 
   next: () => {

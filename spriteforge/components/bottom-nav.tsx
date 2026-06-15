@@ -34,7 +34,7 @@ export function BottomNav({ context }: { context?: ReactNode }) {
           <button
             type="button"
             onClick={next}
-            className="flex items-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-hover"
+            className="flex items-center gap-2 rounded-md bg-brand-strong px-4 py-2.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover"
           >
             下一步：{nextStep.label}
             <ArrowRight className="size-4" />
