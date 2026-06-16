@@ -13,8 +13,8 @@ interface GatedExportButtonProps {
 }
 
 /**
- * Export button behind the login + trial gate. Only rendered when Clerk auth is
- * enabled (so its Clerk hooks always run under a ClerkProvider).
+ * Export button behind the login + trial gate. Only rendered when auth is
+ * enabled (so its `useAuth` hook always runs under an AuthProvider).
  */
 export function GatedExportButton({ onExport, busy, disabled }: GatedExportButtonProps) {
   const {

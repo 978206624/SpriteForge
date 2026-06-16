@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 /**
  * Root error boundary — the ONLY boundary that catches crashes in the root
- * layout itself (ThemeProvider / ClerkProvider / font setup). It replaces the
+ * layout itself (ThemeProvider / AuthProvider / font setup). It replaces the
  * whole document, so it must render its own <html>/<body> and can't rely on the
  * app's theme/providers; styles are inline for a guaranteed render. Page-level
  * errors are handled by the nicer `app/error.tsx` instead.

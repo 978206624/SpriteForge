@@ -1,19 +1,32 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/auth-context";
 
 interface LoginModalProps {
   onClose: () => void;
+  /** Called after a successful login/register (once the session is live). The
+   *  export gate omits this and resumes via its own `isSignedIn` effect; the
+   *  header control passes it to close the modal. */
+  onAuthed?: () => void;
 }
 
+type Mode = "login" | "register";
+
 /**
- * Login prompt shown when a guest tries to export. The actual auth UI is
- * Clerk's modal (opened by SignInButton); after a successful sign-in the gate
- * hook resumes the queued export automatically. Closing leaves all work intact.
+ * Email + password login / register form for the self-hosted auth backend.
+ * On success it refreshes the auth context so `isSignedIn` flips — the export
+ * gate then resumes the queued export automatically. Closing leaves work intact.
  */
-export function LoginModal({ onClose }: LoginModalProps) {
+export function LoginModal({ onClose, onAuthed }: LoginModalProps) {
+  const { refresh } = useAuth();
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -21,6 +34,34 @@ export function LoginModal({ onClose }: LoginModalProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/auth/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ email, password }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { user?: { email: string }; error?: string }
+        | null;
+      if (res.ok && data?.user) {
+        await refresh();
+        onAuthed?.();
+      } else {
+        setError(data?.error ?? "操作失败，请稍后重试。");
+      }
+    } catch {
+      setError("网络错误，请稍后重试。");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -43,28 +84,65 @@ export function LoginModal({ onClose }: LoginModalProps) {
           <X className="size-4" />
         </button>
 
-        <h2 className="text-lg font-bold text-fg">登录后导出</h2>
+        <h2 className="text-lg font-bold text-fg">
+          {mode === "login" ? "登录后导出" : "注册账号"}
+        </h2>
         <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">
-          登录后即可导出 SpriteForge 生成的游戏素材。你的视频与帧已保留，登录后会自动继续导出。
+          {mode === "login"
+            ? "登录后即可导出 SpriteForge 生成的游戏素材。你的视频与帧已保留，登录后会自动继续导出。"
+            : "注册一个账号，开启 3 天免费导出试用。你的视频与帧已保留。"}
         </p>
 
-        <div className="mt-5 flex flex-col gap-2">
-          <SignInButton mode="modal">
-            <button
-              type="button"
-              className="w-full rounded-md bg-brand-strong px-4 py-2.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover"
-            >
-              登录 / 注册
-            </button>
-          </SignInButton>
+        <form className="mt-5 flex flex-col gap-3" onSubmit={submit}>
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="邮箱"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-md border border-line bg-bg px-3 py-2.5 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-brand"
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            placeholder="密码（至少 6 位）"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-md border border-line bg-bg px-3 py-2.5 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-brand"
+          />
+
+          {error && (
+            <p className="text-[13px] text-error" role="alert">
+              {error}
+            </p>
+          )}
+
           <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-md bg-brand-strong px-4 py-2.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover disabled:opacity-60"
           >
-            稍后再说
+            {submitting
+              ? "处理中…"
+              : mode === "login"
+                ? "登录"
+                : "注册并开始试用"}
           </button>
-        </div>
+        </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setMode((m) => (m === "login" ? "register" : "login"));
+          }}
+          className="mt-3 w-full text-center text-[13px] text-fg-muted transition-colors hover:text-fg"
+        >
+          {mode === "login" ? "还没有账号？去注册" : "已有账号？去登录"}
+        </button>
       </div>
     </div>
   );

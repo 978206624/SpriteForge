@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/auth-context";
+import { LoginModal } from "@/components/login-modal";
 import { cn } from "@/lib/utils";
 
 interface TrialInfo {
@@ -49,9 +50,11 @@ function TrialBadge() {
   );
 }
 
-/** Login button (guest) / trial badge + avatar (signed in). */
+/** Login button (guest) / trial badge + email + sign-out (signed in). */
 export function AuthControls() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user, signOut } = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
+
   if (!isLoaded) return null;
 
   return (
@@ -59,17 +62,36 @@ export function AuthControls() {
       {isSignedIn ? (
         <>
           <TrialBadge />
-          <UserButton />
-        </>
-      ) : (
-        <SignInButton mode="modal">
+          <span
+            className="max-w-[160px] truncate text-[13px] text-fg-muted"
+            title={user?.email}
+          >
+            {user?.email}
+          </span>
           <button
             type="button"
+            onClick={() => void signOut()}
+            className="rounded-md border border-line px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+          >
+            退出
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setLoginOpen(true)}
             className="rounded-md bg-brand-strong px-3 py-1.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover"
           >
             登录
           </button>
-        </SignInButton>
+          {loginOpen && (
+            <LoginModal
+              onClose={() => setLoginOpen(false)}
+              onAuthed={() => setLoginOpen(false)}
+            />
+          )}
+        </>
       )}
     </div>
   );

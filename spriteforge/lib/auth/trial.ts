@@ -1,4 +1,5 @@
-import { clerkClient } from "@clerk/nextjs/server";
+import type { RowDataPacket } from "mysql2";
+import { getPool } from "@/lib/db/pool";
 import { TRIAL_DURATION_MS } from "./config";
 
 export interface TrialStatus {
@@ -13,26 +14,33 @@ export interface TrialStatus {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+interface TrialRow extends RowDataPacket {
+  trial_started_at: number | null;
+}
+
+async function readTrialStart(userId: number): Promise<number> {
+  const [rows] = await getPool().query<TrialRow[]>(
+    "SELECT trial_started_at FROM users WHERE id = ? LIMIT 1",
+    [userId],
+  );
+  const stored = rows[0]?.trial_started_at;
+  return stored ? Number(stored) : 0;
+}
+
 /**
- * Evaluate a user's 3-day free trial. The start time is stored once in Clerk
- * private metadata (server-only authorization data; no self-hosted database).
+ * Evaluate a user's 3-day free trial. The start time lives in the user's
+ * `trial_started_at` column (self-hosted MySQL; replaces Clerk private metadata).
  *
  * `start` controls whether a not-yet-started trial is begun: the export action
  * (POST) starts it; a read-only status check (GET, e.g. the header badge) does
  * not — so merely signing in / opening the app never consumes the trial.
  *
- * Only `{ privateMetadata: { trialStartedAt } }` is submitted (no spread of the
- * existing object) so a concurrent metadata write can't be clobbered.
+ * The write is guarded with `WHERE trial_started_at IS NULL`, then the value is
+ * re-read, so two concurrent first-exports converge on whichever timestamp won
+ * rather than clobbering each other.
  */
-export async function evaluateTrial(
-  userId: string,
-  start: boolean,
-): Promise<TrialStatus> {
-  const client = await clerkClient();
-  const user = await client.users.getUser(userId);
-
-  const stored = user.privateMetadata?.trialStartedAt;
-  let trialStartedAt = typeof stored === "number" ? stored : 0;
+export async function evaluateTrial(userId: number, start: boolean): Promise<TrialStatus> {
+  let trialStartedAt = await readTrialStart(userId);
 
   if (!trialStartedAt) {
     if (!start) {
@@ -44,10 +52,13 @@ export async function evaluateTrial(
         daysLeft: Math.ceil(TRIAL_DURATION_MS / DAY_MS),
       };
     }
-    trialStartedAt = Date.now();
-    await client.users.updateUserMetadata(userId, {
-      privateMetadata: { trialStartedAt },
-    });
+    const now = Date.now();
+    await getPool().execute(
+      "UPDATE users SET trial_started_at = ? WHERE id = ? AND trial_started_at IS NULL",
+      [now, userId],
+    );
+    // re-read so a concurrent start that won the race is reflected here too
+    trialStartedAt = (await readTrialStart(userId)) || now;
   }
 
   const trialEndsAt = trialStartedAt + TRIAL_DURATION_MS;

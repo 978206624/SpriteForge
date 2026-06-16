@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/lib/auth/auth-context";
 
 export interface ExportGate {
   /** run `action` if allowed; otherwise open the login or upgrade modal and,
    *  after a successful login, continue the original action automatically */
   guard: (action: () => void) => void;
-  /** Clerk has loaded — the gate can be used */
+  /** auth state has loaded — the gate can be used */
   ready: boolean;
   /** a trial check is in flight */
   checking: boolean;

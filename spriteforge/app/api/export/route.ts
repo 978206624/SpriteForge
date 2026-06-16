@@ -1,6 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
 import { serverAuthEnabled } from "@/lib/auth/config";
+import { getSession } from "@/lib/auth/session";
 import { evaluateTrial } from "@/lib/auth/trial";
+
+export const runtime = "nodejs";
 
 /**
  * Export permission + trial check. The browser does ALL the actual export work
@@ -22,14 +24,14 @@ async function handle(start: boolean): Promise<Response> {
     );
   }
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const session = await getSession();
+    if (!session) {
       return Response.json(
         { allowed: false, reason: "unauthenticated" },
         { status: 401, headers: NO_STORE },
       );
     }
-    const trial = await evaluateTrial(userId, start);
+    const trial = await evaluateTrial(session.userId, start);
     return Response.json(
       { ...trial, reason: trial.allowed ? "ok" : "trial-expired" },
       { headers: NO_STORE },

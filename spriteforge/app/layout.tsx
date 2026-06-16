@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { authEnabled } from "@/lib/auth/config";
+import { AuthProvider } from "@/lib/auth/auth-context";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 
 const inter = Inter({
@@ -45,6 +45,6 @@ export default function RootLayout({
     </html>
   );
 
-  // wrap with Clerk only when configured, so the app builds/runs without keys
-  return authEnabled ? <ClerkProvider>{tree}</ClerkProvider> : tree;
+  // wrap with the auth context only when the login gate is enabled
+  return authEnabled ? <AuthProvider>{tree}</AuthProvider> : tree;
 }
