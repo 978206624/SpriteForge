@@ -41,7 +41,15 @@ export function TimelineRange({
       setLoadingThumbs(true);
       setThumbs([]);
       try {
-        const t = await generateThumbnails(videoUrl, THUMB_COUNT, controller.signal);
+        // size each thumbnail to its on-screen slot so portrait videos stay
+        // crisp instead of being stretched to fill a wider slot
+        const trackW = trackRef.current?.getBoundingClientRect().width ?? 0;
+        const slotWidth = trackW > 0 ? trackW / THUMB_COUNT : undefined;
+        const t = await generateThumbnails(videoUrl, THUMB_COUNT, {
+          slotWidth,
+          slotHeight: 44, // matches the track's h-11
+          signal: controller.signal,
+        });
         if (!controller.signal.aborted) setThumbs(t);
       } catch {
         if (!controller.signal.aborted) setThumbs([]);
@@ -72,15 +80,22 @@ export function TimelineRange({
       cancelAnimationFrame(raf);
       setPlayhead(v.currentTime);
     };
+    // a seek while playing (the loop wrapping back to in, or scrubbing during
+    // playback) must keep the rAF running so the playhead follows the loop
+    // instead of freezing where the seek landed
+    const onSeeked = () => {
+      if (v.paused) setPlayhead(v.currentTime);
+      else start();
+    };
     v.addEventListener("play", start);
     v.addEventListener("pause", stop);
-    v.addEventListener("seeked", stop);
+    v.addEventListener("seeked", onSeeked);
     if (!v.paused) start(); // already playing when this mounts
     return () => {
       cancelAnimationFrame(raf);
       v.removeEventListener("play", start);
       v.removeEventListener("pause", stop);
-      v.removeEventListener("seeked", stop);
+      v.removeEventListener("seeked", onSeeked);
     };
   }, [videoRef]);
 
@@ -118,7 +133,8 @@ export function TimelineRange({
   // keyboard nudging for the focused handle (a11y: role="slider")
   function onHandleKey(handle: Handle, e: ReactKeyboardEvent) {
     if (duration <= 0) return;
-    const step = Math.max(0.1, duration / 100);
+    // ~1% of duration, with a small floor so very short clips still nudge finely
+    const step = Math.max(0.02, duration / 100);
     const cur = handle === "in" ? inTime : outTime;
     let next: number | null = null;
     if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = cur - step;
@@ -186,9 +202,12 @@ export function TimelineRange({
 
         {/* playhead */}
         <div
-          className="pointer-events-none absolute inset-y-0 w-0.5 bg-white/90"
+          className="pointer-events-none absolute inset-y-0 z-[5] w-[3px] -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.9),0_0_5px_rgba(0,0,0,0.7)]"
           style={{ left: `${pct(playhead)}%` }}
-        />
+        >
+          {/* top knob so the playhead reads clearly over busy thumbnails */}
+          <span className="absolute -top-0.5 left-1/2 size-2 -translate-x-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.9)]" />
+        </div>
 
         {/* in / out handles */}
         {(["in", "out"] as const).map((h) => {

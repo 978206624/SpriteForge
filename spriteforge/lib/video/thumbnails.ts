@@ -1,7 +1,9 @@
-/** Height in px of timeline strip thumbnails; width follows the source aspect. */
+/** CSS height in px of timeline strip thumbnails; width follows the source aspect. */
 const THUMB_HEIGHT = 44;
 /** JPEG quality for the (disposable) timeline thumbnails. */
-const THUMB_QUALITY = 0.6;
+const THUMB_QUALITY = 0.82;
+/** Cap the device-pixel-ratio multiplier so 3x+ screens don't blow up decode cost. */
+const MAX_PIXEL_RATIO = 3;
 
 class AbortError extends Error {
   constructor() {
@@ -61,6 +63,15 @@ function seekTo(
  * timeline strip. Returns JPEG data URLs in chronological order.
  * Seeks sequentially (drawImage after each `seeked`) to stay reliable.
  *
+ * Each thumbnail is rasterized at the on-screen slot's *physical* pixel size
+ * (CSS slot size × devicePixelRatio) and the source frame is center-cropped
+ * with `cover` semantics. Sizing to the slot — not the source aspect — is what
+ * keeps portrait videos crisp: a 9:16 frame previously produced a 25px-wide
+ * thumbnail that the strip stretched ~2× to fill a wide slot.
+ *
+ * `slotWidth`/`slotHeight` are the CSS px size of one thumbnail slot; they
+ * default to a square when the caller can't measure the track yet.
+ *
  * Abort-safe: passing an already-aborted or later-aborted `signal` interrupts
  * the metadata load / seek wait and releases the decoder (`removeAttribute` +
  * `load()`) via the `finally` block regardless of where it stops.
@@ -68,8 +79,9 @@ function seekTo(
 export async function generateThumbnails(
   url: string,
   count: number,
-  signal?: AbortSignal,
+  opts: { slotWidth?: number; slotHeight?: number; signal?: AbortSignal } = {},
 ): Promise<string[]> {
+  const { slotWidth, slotHeight, signal } = opts;
   if (count <= 0 || signal?.aborted) return [];
 
   const video = document.createElement("video");
@@ -88,16 +100,33 @@ export async function generateThumbnails(
         : null;
 
     if (ctx) {
-      const ratio = video.videoWidth / video.videoHeight;
-      const w = Math.max(1, Math.round(THUMB_HEIGHT * ratio));
-      ctx.canvas.width = w;
-      ctx.canvas.height = THUMB_HEIGHT;
+      // rasterize at the slot's physical pixel size so the strip stays crisp on
+      // HiDPI screens (44 CSS px = 88+ physical px) instead of being upscaled
+      const dpr = Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+      const cssH = slotHeight && slotHeight > 0 ? slotHeight : THUMB_HEIGHT;
+      const cssW = slotWidth && slotWidth > 0 ? slotWidth : THUMB_HEIGHT;
+      const outH = Math.max(1, Math.round(cssH * dpr));
+      const outW = Math.max(1, Math.round(cssW * dpr));
+
+      // center-crop the source frame to the slot ("cover"): scale by the larger
+      // axis ratio, then take the centered sub-rect of that scaled size
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const scale = Math.max(outW / vw, outH / vh);
+      const sw = outW / scale;
+      const sh = outH / scale;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
+
+      ctx.canvas.width = outW;
+      ctx.canvas.height = outH;
+      ctx.imageSmoothingQuality = "high";
       for (let i = 0; i < count; i++) {
         if (signal?.aborted) break;
         // sample the middle of each evenly-sized slice
         const t = ((i + 0.5) / count) * duration;
         await seekTo(video, Math.min(t, duration - 0.01), signal);
-        ctx.drawImage(video, 0, 0, w, THUMB_HEIGHT);
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
         thumbs.push(ctx.canvas.toDataURL("image/jpeg", THUMB_QUALITY));
       }
     }
