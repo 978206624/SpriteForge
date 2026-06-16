@@ -37,3 +37,7 @@ Thumbs.db
 
 # tk meeting scratch
 .tk-meeting/
+
+# chatgpt mcp (local tooling)
+chatgpt-mcp-tool/
+.chatgpt-mcp/
