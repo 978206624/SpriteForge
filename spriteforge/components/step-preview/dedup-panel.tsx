@@ -1,15 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Copy, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, ListPlus, Loader2 } from "lucide-react";
 import { findDuplicates, type DedupGroup } from "@/lib/frames/dedup";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 import type { FrameId } from "@/types";
-
-interface DedupPanelProps {
-  /** delete the given frames (DB + state); resolves when done */
-  onDelete: (ids: FrameId[]) => Promise<void>;
-}
 
 type Status = "idle" | "scanning" | "done" | "error";
 
@@ -20,8 +15,10 @@ function framesSignature(frames: { id: FrameId; rev: number }[]): string {
   return frames.map((f) => `${f.id}:${f.rev}`).join("|");
 }
 
-export function DedupPanel({ onDelete }: DedupPanelProps) {
+export function DedupPanel() {
   const frames = useWorkflowStore((s) => s.frames);
+  const selection = useWorkflowStore((s) => s.selection);
+  const addFramesToSelection = useWorkflowStore((s) => s.addFramesToSelection);
   const sig = useMemo(() => framesSignature(frames), [frames]);
 
   const [status, setStatus] = useState<Status>("idle");
@@ -30,8 +27,6 @@ export function DedupPanel({ onDelete }: DedupPanelProps) {
     groups: [],
   });
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // a scan result is only valid for the exact sequence it was computed on; any
   // add/delete/reorder/reprocess changes `sig` and silently invalidates it
@@ -41,11 +36,15 @@ export function DedupPanel({ onDelete }: DedupPanelProps) {
   const shownStatus: Status = !fresh && status === "done" ? "idle" : status;
   const dropIds = groups.flatMap((g) => g.drop.map((d) => d.id));
 
+  // derive "added" purely from the live selection so it stays truthful even if
+  // the user later deselects those frames in the strip — no local mirror state
+  const selectedSet = useMemo(() => new Set(selection), [selection]);
+  const allAdded = dropIds.length > 0 && dropIds.every((id) => selectedSet.has(id));
+
   const scan = async () => {
     const startSig = sig;
     setStatus("scanning");
     setError(null);
-    setConfirming(false);
     try {
       const found = await findDuplicates(frames);
       setResult({ sig: startSig, groups: found });
@@ -53,19 +52,6 @@ export function DedupPanel({ onDelete }: DedupPanelProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "查重失败");
       setStatus("error");
-    }
-  };
-
-  const deleteAll = async () => {
-    if (dropIds.length === 0) return;
-    setDeleting(true);
-    try {
-      await onDelete(dropIds);
-      setResult({ sig: "", groups: [] });
-      setStatus("idle");
-      setConfirming(false);
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -104,51 +90,43 @@ export function DedupPanel({ onDelete }: DedupPanelProps) {
             发现 <span className="font-semibold text-fg">{groups.length}</span>{" "}
             组近似帧，建议删除{" "}
             <span className="font-semibold text-brand">{dropIds.length}</span> 帧
-            （每组保留第一帧）。
+            （每组保留第一帧）。点标签把建议删除的帧加入选择，再用上方「删除选中」删除。
           </p>
           <div className="flex flex-wrap gap-2">
-            {groups.map((g) => (
-              <span
-                key={g.keep.id}
-                className="rounded-md bg-elevated px-2 py-1 font-mono text-[12px] text-fg-subtle"
-                title="保留首帧，删除其余"
-              >
-                保留 {g.keep.index + 1}，删 {g.drop.map((d) => d.index + 1).join(",")}
-              </span>
-            ))}
+            {groups.map((g) => {
+              const ids = g.drop.map((d) => d.id);
+              const added = ids.every((id) => selectedSet.has(id));
+              const dropLabel = g.drop.map((d) => d.index + 1).join(",");
+              return (
+                <button
+                  key={g.keep.id}
+                  type="button"
+                  onClick={() => addFramesToSelection(ids)}
+                  aria-pressed={added}
+                  aria-label={`保留第 ${g.keep.index + 1} 帧，将第 ${dropLabel} 帧加入待删选择${added ? "（已加入）" : ""}`}
+                  className={
+                    added
+                      ? "flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-2 py-1 font-mono text-[12px] text-brand transition-colors"
+                      : "rounded-md bg-elevated px-2 py-1 font-mono text-[12px] text-fg-subtle transition-colors hover:bg-hover hover:text-fg"
+                  }
+                  title={added ? "已加入帧条带多选" : "把建议删除的帧加入帧条带多选"}
+                >
+                  {added && <Check className="size-3" />}
+                  保留 {g.keep.index + 1}，删 {dropLabel}
+                </button>
+              );
+            })}
           </div>
 
-          {confirming ? (
-            <div className="flex items-center gap-2 text-[13px]">
-              <span className="text-fg">确认删除 {dropIds.length} 个重复帧？</span>
-              <button
-                type="button"
-                onClick={deleteAll}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md bg-error/90 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-error disabled:opacity-50"
-              >
-                {deleting && <Loader2 className="size-3.5 animate-spin" />}
-                确认删除
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                disabled={deleting}
-                className="rounded-md border border-line px-3 py-1.5 text-fg-muted transition-colors hover:bg-hover hover:text-fg disabled:opacity-50"
-              >
-                取消
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              className="flex w-fit items-center gap-1.5 rounded-md border border-error/40 bg-error/10 px-3 py-1.5 text-[13px] font-semibold text-error transition-colors hover:bg-error/20"
-            >
-              <Trash2 className="size-3.5" />
-              删除全部 {dropIds.length} 个重复帧
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => addFramesToSelection(dropIds)}
+            disabled={allAdded}
+            className="flex w-fit items-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-[13px] font-medium text-fg-muted transition-colors hover:bg-hover hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-muted"
+          >
+            {allAdded ? <Check className="size-3.5" /> : <ListPlus className="size-3.5" />}
+            {allAdded ? "已全部加入选择" : `全部加入选择（${dropIds.length}）`}
+          </button>
         </div>
       )}
     </div>

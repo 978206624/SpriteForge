@@ -92,7 +92,7 @@ export function PreviewStep() {
       </div>
 
       <FrameStrip />
-      <DedupPanel onDelete={handleDelete} />
+      <DedupPanel />
     </div>
   );
 }

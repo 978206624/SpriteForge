@@ -100,6 +100,9 @@ interface WorkflowState {
   setLoopRange: (range: LoopRange | null) => void;
   setPreviewIndex: (index: number) => void;
   toggleFrameSelection: (id: FrameId) => void;
+  /** add frames to the selection without ever deselecting; idempotent on
+   *  duplicate/already-selected ids (one state update regardless of count) */
+  addFramesToSelection: (ids: FrameId[]) => void;
   clearSelection: () => void;
   /** replace frames after a deletion, clamping loop/playhead and clearing
    *  selection (DB deletion is performed by the caller first) */
@@ -287,6 +290,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         ? s.selection.filter((x) => x !== id)
         : [...s.selection, id],
     })),
+  addFramesToSelection: (ids) =>
+    set((s) => ({ selection: Array.from(new Set([...s.selection, ...ids])) })),
   clearSelection: () => set({ selection: [] }),
   applyDeletion: (frames) =>
     set((s) => ({
