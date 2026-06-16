@@ -8,6 +8,7 @@ import type { FrameId } from "@/types";
 import { AnimationPreview } from "./animation-preview";
 import { DedupPanel } from "./dedup-panel";
 import { FrameStrip } from "./frame-strip";
+import { LoopDetectPanel } from "./loop-detect-panel";
 import { LoopMarker } from "./loop-marker";
 
 export function PreviewStep() {
@@ -92,6 +93,7 @@ export function PreviewStep() {
       </div>
 
       <FrameStrip />
+      <LoopDetectPanel onDelete={handleDelete} />
       <DedupPanel />
     </div>
   );

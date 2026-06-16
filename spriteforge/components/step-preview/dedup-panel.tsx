@@ -3,17 +3,10 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Check, Copy, ListPlus, Loader2 } from "lucide-react";
 import { findDuplicates, type DedupGroup } from "@/lib/frames/dedup";
+import { framesSignature } from "@/lib/frames/signature";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
-import type { FrameId } from "@/types";
 
 type Status = "idle" | "scanning" | "done" | "error";
-
-/** Order- and content-sensitive signature of the current frame sequence.
- *  Includes `rev` so a re-keyed frame (new thumbnail, same id) also invalidates
- *  a prior scan, since dedup hashes the thumbnails. */
-function framesSignature(frames: { id: FrameId; rev: number }[]): string {
-  return frames.map((f) => `${f.id}:${f.rev}`).join("|");
-}
 
 export function DedupPanel() {
   const frames = useWorkflowStore((s) => s.frames);
