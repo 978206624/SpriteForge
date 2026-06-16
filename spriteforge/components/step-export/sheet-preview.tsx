@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
 import { buildSheet } from "@/lib/spritesheet/pack";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
+import { SheetPreviewModal } from "./sheet-preview-modal";
 
 /** Per-frame longest edge for the (downscaled) live preview sheet. */
 const PREVIEW_FRAME_EDGE = 96;
@@ -17,6 +18,7 @@ export function SheetPreview() {
   const token = useRef(0);
   const [building, setBuilding] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
     const mine = ++token.current;
@@ -56,16 +58,32 @@ export function SheetPreview() {
         <span className="ml-auto font-mono text-fg-subtle">
           {frameCount} 帧 · 每行 {sheetParams.columns}
         </span>
+        <button
+          type="button"
+          onClick={() => setZoomed(true)}
+          disabled={frameCount === 0}
+          className="flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[12px] text-fg-muted transition-colors hover:bg-hover hover:text-fg disabled:opacity-50"
+        >
+          <Maximize2 className="size-3" />
+          大图预览
+        </button>
       </div>
-      <div className="flex min-h-40 flex-1 items-center justify-center overflow-auto rounded-lg border border-line bg-base p-3">
+      <button
+        type="button"
+        onClick={() => setZoomed(true)}
+        disabled={frameCount === 0}
+        title="点击查看大图"
+        className="group flex min-h-40 flex-1 items-center justify-center overflow-auto rounded-lg border border-line bg-base p-3 enabled:cursor-zoom-in disabled:cursor-default"
+      >
         <canvas
           ref={canvasRef}
-          className="max-h-[42vh] max-w-full object-contain [image-rendering:pixelated]"
+          className="max-h-[42vh] max-w-full object-contain transition-transform [image-rendering:pixelated] group-hover:scale-[1.01]"
         />
-      </div>
+      </button>
       <p className="text-[12px] text-fg-subtle">
-        预览为缩略示意；导出使用原始分辨率。
+        预览为缩略示意；点击「大图预览」按原始分辨率查看。
       </p>
+      {zoomed && <SheetPreviewModal onClose={() => setZoomed(false)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Maximize2, X } from "lucide-react";
 import { getPixels } from "@/lib/frames/store";
 import { previewChroma } from "@/lib/image/chroma";
 import { isValidHex } from "@/lib/image/color";
@@ -11,6 +11,7 @@ import {
   sampleBackgroundColor,
 } from "@/lib/image/eyedropper";
 import { Checkerboard } from "@/components/shared/checkerboard";
+import { useZoomPan } from "@/lib/hooks/use-zoom-pan";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 import { DEFAULT_CHROMA_PARAMS, type ChromaParams, type FrameId } from "@/types";
 import { ChromaKeyPanel } from "./chroma-key-panel";
@@ -62,6 +63,24 @@ export function FrameEditModal({
   const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewToken = useRef(0);
+
+  // shared zoom/pan driving both the 原图 and 抠图后 canvases in lockstep, so the
+  // user inspects the same region before/after keying. Reset on frame change.
+  const {
+    attachZoom,
+    panHandlers,
+    transformStyle,
+    transform,
+    zoomed,
+    dragging,
+    reset: resetZoom,
+  } = useZoomPan({ maxScale: 12 });
+  // grab/grabbing only when panning is actually available (not in eyedropper mode)
+  const panCursor = (pannable: boolean) =>
+    pannable && zoomed ? (dragging ? "grabbing" : "grab") : "default";
+  useEffect(() => {
+    resetZoom();
+  }, [frameId, resetZoom]);
 
   // load the original frame pixels, downscaled for smooth live preview
   useEffect(() => {
@@ -232,37 +251,68 @@ export function FrameEditModal({
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:flex-row">
           {/* comparison */}
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-            <figure className="flex min-h-0 flex-col gap-1.5">
-              <figcaption className="text-[12px] text-fg-subtle">原图</figcaption>
-              <div className="flex min-h-40 flex-1 items-center justify-center overflow-hidden rounded-md border border-line bg-base">
-                <canvas
-                  ref={sourceCanvasRef}
-                  onClick={handleEyedrop}
-                  className={`max-h-[50vh] max-w-full object-contain ${
-                    eyedropper ? "cursor-crosshair" : ""
-                  }`}
-                />
-              </div>
-            </figure>
-            <figure className="flex min-h-0 flex-col gap-1.5">
-              <figcaption className="flex items-center gap-2 text-[12px] text-fg-subtle">
-                抠图后
-                {previewing && <Loader2 className="size-3 animate-spin" />}
-                {needsAttention && (
-                  <span className="text-warning">可能未抠净</span>
-                )}
-              </figcaption>
-              <Checkerboard
-                size={10}
-                className="flex min-h-40 flex-1 items-center justify-center overflow-hidden rounded-md border border-line"
-              >
-                <canvas
-                  ref={previewCanvasRef}
-                  className="max-h-[50vh] max-w-full object-contain"
-                />
-              </Checkerboard>
-            </figure>
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+              <figure className="flex min-h-0 flex-col gap-1.5">
+                <figcaption className="text-[12px] text-fg-subtle">原图</figcaption>
+                <div
+                  ref={attachZoom}
+                  onDoubleClick={resetZoom}
+                  {...(eyedropper ? {} : panHandlers)}
+                  style={{ cursor: eyedropper ? "crosshair" : panCursor(true) }}
+                  className="flex min-h-40 flex-1 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-line bg-base"
+                >
+                  <canvas
+                    ref={sourceCanvasRef}
+                    onClick={handleEyedrop}
+                    style={transformStyle}
+                    className={`max-h-[50vh] max-w-full object-contain ${
+                      eyedropper ? "cursor-crosshair" : ""
+                    }`}
+                  />
+                </div>
+              </figure>
+              <figure className="flex min-h-0 flex-col gap-1.5">
+                <figcaption className="flex items-center gap-2 text-[12px] text-fg-subtle">
+                  抠图后
+                  {previewing && <Loader2 className="size-3 animate-spin" />}
+                  {needsAttention && (
+                    <span className="text-warning">可能未抠净</span>
+                  )}
+                </figcaption>
+                <Checkerboard
+                  size={10}
+                  className="flex min-h-40 flex-1 touch-none select-none items-center justify-center overflow-hidden rounded-md border border-line"
+                >
+                  <div
+                    ref={attachZoom}
+                    onDoubleClick={resetZoom}
+                    {...(eyedropper ? {} : panHandlers)}
+                    style={{ cursor: panCursor(!eyedropper) }}
+                    className="flex h-full w-full items-center justify-center overflow-hidden"
+                  >
+                    <canvas
+                      ref={previewCanvasRef}
+                      style={transformStyle}
+                      className="max-h-[50vh] max-w-full object-contain"
+                    />
+                  </div>
+                </Checkerboard>
+              </figure>
+            </div>
+            <p className="flex items-center gap-2 text-[11px] text-fg-subtle">
+              <Maximize2 className="size-3" />
+              滚轮缩放 · 拖动平移 · 双击复位
+              {zoomed && (
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="ml-auto rounded px-1.5 py-0.5 font-mono text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+                >
+                  {Math.round(transform.scale * 100)}% · 复位
+                </button>
+              )}
+            </p>
           </div>
 
           {/* controls */}

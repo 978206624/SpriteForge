@@ -31,8 +31,10 @@ export function VideoPreview({
   // without re-binding listeners on every slider drag
   const inRef = useRef(inTime);
   const outRef = useRef(outTime);
-  inRef.current = inTime;
-  outRef.current = outTime;
+  useEffect(() => {
+    inRef.current = inTime;
+    outRef.current = outTime;
+  }, [inTime, outTime]);
 
   useEffect(() => {
     const v = videoRef.current;
