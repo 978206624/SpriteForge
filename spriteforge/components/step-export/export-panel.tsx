@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, Download, FileArchive, Grid3x3, Images, Loader2 } from "lucide-react";
+import { AlertTriangle, FileArchive, Grid3x3, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authEnabled } from "@/lib/auth/config";
 import { resolveFps } from "@/lib/video/probe";
 import { collectFramePngs } from "@/lib/export/png-sequence";
 import { buildSheet } from "@/lib/spritesheet/pack";
@@ -16,6 +17,8 @@ import {
 } from "@/lib/export/zip";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 import type { ExportKind } from "@/types";
+import { ExportActionButton } from "./export-action-button";
+import { GatedExportButton } from "./gated-export-button";
 
 const KINDS: { value: ExportKind; label: string; hint: string; icon: typeof Images }[] = [
   { value: "png-sequence", label: "PNG 序列", hint: "frame_000001.png … 打包为 zip", icon: Images },
@@ -116,19 +119,19 @@ export function ExportPanel() {
         })}
       </div>
 
-      <button
-        type="button"
-        onClick={handleExport}
-        disabled={exporting || frameCount === 0}
-        className="flex items-center justify-center gap-2 rounded-md bg-brand-strong px-4 py-2.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover disabled:opacity-50"
-      >
-        {exporting ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Download className="size-4" />
-        )}
-        {exporting ? "正在导出…" : "导出"}
-      </button>
+      {authEnabled ? (
+        <GatedExportButton
+          onExport={handleExport}
+          busy={exporting}
+          disabled={exporting || frameCount === 0}
+        />
+      ) : (
+        <ExportActionButton
+          onClick={handleExport}
+          busy={exporting}
+          disabled={exporting || frameCount === 0}
+        />
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded-md border border-error/40 bg-error/10 px-3.5 py-2.5 text-[13px] text-error">

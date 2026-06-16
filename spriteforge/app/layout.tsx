@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import { authEnabled } from "@/lib/auth/config";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 
 const inter = Inter({
@@ -24,7 +26,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
+  const tree = (
     <html
       lang="zh-CN"
       suppressHydrationWarning
@@ -42,4 +44,7 @@ export default function RootLayout({
       </body>
     </html>
   );
+
+  // wrap with Clerk only when configured, so the app builds/runs without keys
+  return authEnabled ? <ClerkProvider>{tree}</ClerkProvider> : tree;
 }

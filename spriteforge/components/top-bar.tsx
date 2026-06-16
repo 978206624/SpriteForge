@@ -2,6 +2,8 @@
 
 import { useTheme } from "next-themes";
 import { Flame, Moon, Sun } from "lucide-react";
+import { authEnabled } from "@/lib/auth/config";
+import { AuthControls } from "@/components/auth-controls";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -48,13 +50,8 @@ export function TopBar() {
           <Sun className="size-[18px] dark:hidden" />
           <Moon className="hidden size-[18px] dark:block" />
         </button>
-        {/* Login / avatar slot — wired to Clerk in Phase 7 */}
-        <button
-          type="button"
-          className="rounded-md bg-brand-strong px-3 py-1.5 text-sm font-semibold text-on-brand transition-colors hover:bg-brand-strong-hover"
-        >
-          登录
-        </button>
+        {/* Clerk login / avatar / trial badge — only when auth is configured */}
+        {authEnabled && <AuthControls />}
       </div>
     </header>
   );
