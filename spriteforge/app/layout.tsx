@@ -1,18 +1,24 @@
 import type { Metadata } from "next";
-import { Inter, Roboto_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { authEnabled } from "@/lib/auth/config";
 import { AuthProvider } from "@/lib/auth/auth-context";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 
-const inter = Inter({
+// Self-hosted variable fonts (woff2 in ./fonts) — no build-time Google Fonts
+// fetch, so `next build` works on networks that can't reach fonts.googleapis.com.
+const inter = localFont({
+  src: "./fonts/inter-latin-variable.woff2",
   variable: "--font-inter",
-  subsets: ["latin"],
+  weight: "100 900",
+  display: "swap",
 });
 
-const robotoMono = Roboto_Mono({
+const robotoMono = localFont({
+  src: "./fonts/roboto-mono-latin-variable.woff2",
   variable: "--font-roboto-mono",
-  subsets: ["latin"],
+  weight: "100 700",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
