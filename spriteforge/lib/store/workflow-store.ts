@@ -1,12 +1,15 @@
 import { create } from "zustand";
 import {
   DEFAULT_CHROMA_PARAMS,
+  DEFAULT_SHEET_PARAMS,
   STEPS,
   type ChromaParams,
   type ExportFps,
+  type ExportKind,
   type Frame,
   type FrameId,
   type LoopRange,
+  type SheetParams,
   type StepKey,
   type VideoMeta,
 } from "@/types";
@@ -101,6 +104,16 @@ interface WorkflowState {
   /** replace frames after a deletion, clamping loop/playhead and clearing
    *  selection (DB deletion is performed by the caller first) */
   applyDeletion: (frames: Frame[]) => void;
+
+  // ---- Step 4: export ----
+  exportKind: ExportKind;
+  sheetParams: SheetParams;
+  exportStatus: "idle" | "exporting";
+  exportError: string | null;
+  setExportKind: (kind: ExportKind) => void;
+  setSheetParams: (params: SheetParams) => void;
+  setExportStatus: (status: "idle" | "exporting") => void;
+  setExportError: (error: string | null) => void;
 }
 
 const INITIAL_FRAME_STATE = {
@@ -119,6 +132,10 @@ const INITIAL_FRAME_STATE = {
   loopRange: null as LoopRange | null,
   previewIndex: 0,
   selection: [] as FrameId[],
+  exportKind: "zip" as ExportKind,
+  sheetParams: DEFAULT_SHEET_PARAMS as SheetParams,
+  exportStatus: "idle" as "idle" | "exporting",
+  exportError: null as string | null,
 };
 
 /** Reset extracted frames when the range/fps changes after extraction, so a
@@ -286,4 +303,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       loopRange: clampLoopRange(s.loopRange, frames.length),
       previewIndex: Math.max(0, Math.min(s.previewIndex, frames.length - 1)),
     })),
+
+  // ---- Step 4: export ----
+  setExportKind: (exportKind) => set({ exportKind }),
+  setSheetParams: (sheetParams) => set({ sheetParams }),
+  setExportStatus: (exportStatus) => set({ exportStatus }),
+  setExportError: (exportError) => set({ exportError }),
 }));
