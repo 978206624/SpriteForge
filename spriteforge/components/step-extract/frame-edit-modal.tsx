@@ -5,10 +5,14 @@ import { Loader2, X } from "lucide-react";
 import { getPixels } from "@/lib/frames/store";
 import { previewChroma } from "@/lib/image/chroma";
 import { isValidHex } from "@/lib/image/color";
-import { clientToImageCoords, pixelToHex } from "@/lib/image/eyedropper";
+import {
+  clientToImageCoords,
+  pixelToHex,
+  sampleBackgroundColor,
+} from "@/lib/image/eyedropper";
 import { Checkerboard } from "@/components/shared/checkerboard";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
-import type { ChromaParams, FrameId } from "@/types";
+import { DEFAULT_CHROMA_PARAMS, type ChromaParams, type FrameId } from "@/types";
 import { ChromaKeyPanel } from "./chroma-key-panel";
 
 interface FrameEditModalProps {
@@ -83,7 +87,35 @@ export function FrameEditModal({
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(bitmap, 0, 0, w, h);
         bitmap.close();
-        if (ctx && !cancelled) setSource(ctx.getImageData(0, 0, w, h));
+        if (ctx && !cancelled) {
+          const img = ctx.getImageData(0, 0, w, h);
+          setSource(img);
+          // Default the key color to THIS frame's sampled background instead of
+          // the fixed green, but only when the user hasn't customized it yet
+          // (no per-frame override and the global is still the untouched
+          // default). Makes the first-open preview meaningful for non-green
+          // footage; the eyedropper / hex input still let the user override.
+          const st = useWorkflowStore.getState();
+          const fr = st.frames.find((f) => f.id === frameId);
+          if (
+            !fr?.overrideParams &&
+            st.globalChromaParams.backgroundColor ===
+              DEFAULT_CHROMA_PARAMS.backgroundColor
+          ) {
+            const sampled = sampleBackgroundColor(img);
+            if (sampled) {
+              // Only apply the sample if the user hasn't already picked a color
+              // during the (possibly slow) image decode — the functional update
+              // re-checks the *current* local value, so a manual pick made while
+              // loading is never clobbered.
+              setParams((p) =>
+                p.backgroundColor === DEFAULT_CHROMA_PARAMS.backgroundColor
+                  ? { ...p, backgroundColor: sampled }
+                  : p,
+              );
+            }
+          }
+        }
       } catch {
         // frame missing / decode failure — leave the canvases empty
       }
