@@ -1,32 +1,19 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   estimateBytes,
   estimateFrameCount,
   resolveFps,
 } from "@/lib/video/probe";
+import { formatBytes, frameCountLevel } from "@/lib/utils/limits";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
-
-/** Above this estimated frame count we warn about memory/perf pressure. */
-const FRAME_WARN_THRESHOLD = 300;
 
 function formatDuration(s: number): string {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let v = bytes;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -50,7 +37,7 @@ export function VideoInfo() {
   const effFps = resolveFps(fps, meta);
   const frameCount = estimateFrameCount(inTime, outTime, fps, meta);
   const sizeBytes = estimateBytes(frameCount, meta);
-  const overLimit = frameCount > FRAME_WARN_THRESHOLD;
+  const level = frameCountLevel(frameCount);
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,10 +62,19 @@ export function VideoInfo() {
         </div>
       </div>
 
-      {overLimit && (
-        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3.5 py-2.5 text-[13px] text-warning">
+      {level !== "ok" && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-md border px-3.5 py-2.5 text-[13px]",
+            level === "over"
+              ? "border-error/40 bg-error/10 text-error"
+              : "border-warning/40 bg-warning/10 text-warning",
+          )}
+        >
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          帧数过多（{frameCount} 帧）可能卡顿或内存不足，建议缩小区间或降低 fps。
+          {level === "over"
+            ? `帧数过多（${frameCount} 帧），提取很可能卡顿或内存不足。请明显缩小区间或降低 fps。`
+            : `帧数较多（${frameCount} 帧）可能影响性能，建议缩小区间或降低 fps。`}
         </div>
       )}
     </div>

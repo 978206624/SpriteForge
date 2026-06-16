@@ -91,3 +91,35 @@ body {
   color: var(--fg);
   font-family: var(--font-sans);
 }
+
+/* Indeterminate shimmer that sweeps across a progress bar to signal active
+   work — visible even at 0% or when the task finishes too fast to watch the
+   bar fill. Restrained per the design system; disabled for reduced-motion.
+   Apply `.progress-sweep` to the (relative, overflow-hidden) track element. */
+@keyframes progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.progress-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--brand) 35%, transparent),
+    transparent
+  );
+  animation: progress-sweep 1.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-sweep::after {
+    animation: none;
+  }
+}

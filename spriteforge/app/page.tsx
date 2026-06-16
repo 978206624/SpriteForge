@@ -7,6 +7,7 @@ import { ImportStep } from "@/components/step-import/import-step";
 import { ExtractStep } from "@/components/step-extract/extract-step";
 import { PreviewStep } from "@/components/step-preview/preview-step";
 import { ExportStep } from "@/components/step-export/export-step";
+import { ToastHost } from "@/components/shared/error-toast";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 import { STEPS } from "@/types";
 
@@ -38,6 +39,7 @@ export default function Home() {
         )}
       </main>
       <BottomNav context={`当前：${label}`} nextDisabled={nextDisabled} />
+      <ToastHost />
     </div>
   );
 }

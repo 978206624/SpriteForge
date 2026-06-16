@@ -10,6 +10,7 @@ import {
   getManifest,
   updateManifestGlobalParams,
 } from "@/lib/frames/store";
+import { pushToast } from "@/lib/store/toast-store";
 import { applyToAllFrames, processFrame } from "@/lib/image/chroma";
 import { extractFrames } from "@/lib/video/extract";
 import { estimateFrameCount } from "@/lib/video/probe";
@@ -93,7 +94,9 @@ export function ExtractStep() {
           await clearFrames();
         }
       } catch {
-        // IndexedDB unavailable — extraction will surface a clear error
+        if (!cancelled) {
+          pushToast("本地存储 (IndexedDB) 不可用，帧缓存可能无法保存。");
+        }
       }
     })();
     return () => {
@@ -202,7 +205,9 @@ export function ExtractStep() {
       if (selectedFrameId) updateFrameMeta(selectedFrameId, { overrideParams: null });
       // persist the new global params so they survive refresh (effective params
       // of non-overridden frames depend on them)
-      void updateManifestGlobalParams(params);
+      void updateManifestGlobalParams(params).catch(() =>
+        pushToast("全局抠图参数保存失败，刷新后可能需要重新设置。"),
+      );
 
       chromaAbortRef.current?.abort();
       const ctrl = new AbortController();

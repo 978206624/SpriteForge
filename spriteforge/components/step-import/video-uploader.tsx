@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isSupportedVideo, probeVideo } from "@/lib/video/probe";
+import { isLargeFile } from "@/lib/utils/limits";
+import { pushToast } from "@/lib/store/toast-store";
 import { useWorkflowStore } from "@/lib/store/workflow-store";
 
 const UNSUPPORTED_MSG = "当前格式暂不支持，建议转为 mp4 / webm";
@@ -11,6 +13,7 @@ const UNSUPPORTED_MSG = "当前格式暂不支持，建议转为 mp4 / webm";
 export function VideoUploader() {
   const setVideo = useWorkflowStore((s) => s.setVideo);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestRef = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,16 +24,26 @@ export function VideoUploader() {
       setError(UNSUPPORTED_MSG);
       return;
     }
+    const mine = ++requestRef.current; // drop a slower probe if a newer file lands
     const url = URL.createObjectURL(file);
     setLoading(true);
     try {
       const meta = await probeVideo(url, file.name, file.size);
+      if (mine !== requestRef.current) {
+        URL.revokeObjectURL(url); // superseded — discard this result
+        return;
+      }
       setVideo(file, url, meta);
+      if (isLargeFile(file.size)) {
+        pushToast("视频文件较大，读取、提取与导出可能较慢。", "info");
+      }
     } catch {
       URL.revokeObjectURL(url);
-      setError("视频加载失败，请尝试其他文件或转为 mp4 / webm");
+      if (mine === requestRef.current) {
+        setError("视频加载失败，请尝试其他文件或转为 mp4 / webm");
+      }
     } finally {
-      setLoading(false);
+      if (mine === requestRef.current) setLoading(false);
     }
   }
 

@@ -109,11 +109,9 @@ interface WorkflowState {
   exportKind: ExportKind;
   sheetParams: SheetParams;
   exportStatus: "idle" | "exporting";
-  exportError: string | null;
   setExportKind: (kind: ExportKind) => void;
   setSheetParams: (params: SheetParams) => void;
   setExportStatus: (status: "idle" | "exporting") => void;
-  setExportError: (error: string | null) => void;
 }
 
 const INITIAL_FRAME_STATE = {
@@ -135,7 +133,6 @@ const INITIAL_FRAME_STATE = {
   exportKind: "zip" as ExportKind,
   sheetParams: DEFAULT_SHEET_PARAMS as SheetParams,
   exportStatus: "idle" as "idle" | "exporting",
-  exportError: null as string | null,
 };
 
 /** Reset extracted frames when the range/fps changes after extraction, so a
@@ -308,5 +305,4 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setExportKind: (exportKind) => set({ exportKind }),
   setSheetParams: (sheetParams) => set({ sheetParams }),
   setExportStatus: (exportStatus) => set({ exportStatus }),
-  setExportError: (exportError) => set({ exportError }),
 }));

@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertTriangle, FileArchive, Grid3x3, Images } from "lucide-react";
+import { FileArchive, Grid3x3, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authEnabled } from "@/lib/auth/config";
 import { resolveFps } from "@/lib/video/probe";
+import { pushToast } from "@/lib/store/toast-store";
 import { collectFramePngs } from "@/lib/export/png-sequence";
 import { buildSheet } from "@/lib/spritesheet/pack";
 import { buildSpritesheetJson } from "@/lib/spritesheet/json";
@@ -30,17 +31,14 @@ export function ExportPanel() {
   const exportKind = useWorkflowStore((s) => s.exportKind);
   const setExportKind = useWorkflowStore((s) => s.setExportKind);
   const status = useWorkflowStore((s) => s.exportStatus);
-  const error = useWorkflowStore((s) => s.exportError);
   const frameCount = useWorkflowStore((s) => s.frames.length);
   const setExportStatus = useWorkflowStore((s) => s.setExportStatus);
-  const setExportError = useWorkflowStore((s) => s.setExportError);
 
   const exporting = status === "exporting";
 
   const handleExport = async () => {
     const s = useWorkflowStore.getState();
     if (s.frames.length === 0 || s.exportStatus === "exporting") return; // reentrancy guard
-    setExportError(null);
     setExportStatus("exporting");
     try {
       const fps = resolveFps(s.fps, s.videoMeta);
@@ -82,7 +80,7 @@ export function ExportPanel() {
         );
       }
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : "导出失败");
+      pushToast(`导出失败：${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
       setExportStatus("idle");
     }
@@ -131,13 +129,6 @@ export function ExportPanel() {
           busy={exporting}
           disabled={exporting || frameCount === 0}
         />
-      )}
-
-      {error && (
-        <div className="flex items-start gap-2 rounded-md border border-error/40 bg-error/10 px-3.5 py-2.5 text-[13px] text-error">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-          {error}
-        </div>
       )}
 
       <p className="text-[12px] text-fg-subtle">

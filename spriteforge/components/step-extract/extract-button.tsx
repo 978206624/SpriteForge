@@ -42,9 +42,9 @@ export function ExtractButton({ onExtract, onCancel }: ExtractButtonProps) {
             取消
           </button>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-elevated">
+        <div className="progress-sweep relative h-2 overflow-hidden rounded-full bg-elevated">
           <div
-            className="h-full rounded-full bg-brand transition-[width] duration-150"
+            className="relative h-full rounded-full bg-brand transition-[width] duration-300 ease-out"
             style={{ width: `${pct}%` }}
           />
         </div>

@@ -10,20 +10,24 @@
  * Referenced directly (not destructured) so Next inlines the values into the
  * client bundle at build time.
  */
+/** The single deployer-controlled switch both sides key off of. */
+const authFlagEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true";
+
 export const authEnabled =
-  process.env.NEXT_PUBLIC_AUTH_ENABLED === "true" &&
-  !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  authFlagEnabled && !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 /**
- * Server-side counterpart: auth is only truly enforceable when BOTH the
- * publishable key and the secret key are present (the secret is required for
- * `clerkMiddleware()` / `auth()`). The export API and proxy key off this so a
- * partial (public-key-only) configuration degrades gracefully instead of
- * throwing. `CLERK_SECRET_KEY` is a server-only var (not `NEXT_PUBLIC_`), so it
- * is stripped from the client bundle — this constant reads `false` there and is
- * only ever consulted on the server.
+ * Server-side counterpart, gated on the SAME `NEXT_PUBLIC_AUTH_ENABLED` flag as
+ * {@link authEnabled} plus both Clerk keys (the secret is required for
+ * `clerkMiddleware()` / `auth()`). Keying both sides off the one flag means
+ * client and server can't disagree: with the flag off, both run open; with it
+ * on, all three variables must be set. The export API and proxy consult this.
+ * `CLERK_SECRET_KEY` is a server-only var (not `NEXT_PUBLIC_`), stripped from
+ * the client bundle — this constant reads `false` there and is only ever
+ * consulted on the server.
  */
 export const serverAuthEnabled =
+  authFlagEnabled &&
   !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
   !!process.env.CLERK_SECRET_KEY;
 
